@@ -45,8 +45,9 @@ class DeployType(str, Enum):
     Frontend = "Frontend"
     Backend = "Backend"
  
-
+# ----------------------------
 # Connect with new credentials
+# ----------------------------
 @app.post("/connect")
 def connect(
     name: str = Form(...),
@@ -57,7 +58,8 @@ def connect(
     username: str = Form(...),
     password: str = Form(...),
     remote_path: str = Form(...),
-    protocol: Protocol = Form(...)
+    protocol: Protocol = Form(...),
+    trigger_script_path: str = Form(...)  # ✅ New field
 ):
     try:
         # Connect to server
@@ -74,6 +76,7 @@ def connect(
             "password": password,
             "remote_path": remote_path,
             "protocol": protocol.value,
+            "trigger_script_path": trigger_script_path,  # ✅ New field
             "connected_at": datetime.utcnow()
         }
         collection.insert_one(connection_data)
@@ -82,8 +85,9 @@ def connect(
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
  
-
+# ----------------------------
 # Reconnect using existing name
+# ----------------------------
 @app.post("/connect/existing")
 def connect_existing(name: str = Form(...)):
     record = collection.find_one({"name": name})
@@ -102,8 +106,9 @@ def connect_existing(name: str = Form(...)):
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
  
-
+# ----------------------------
 # Update saved connection by name
+# ----------------------------
 @app.put("/connections/{name}")
 def update_connection(name: str,
     description: str = Form(None),
@@ -113,7 +118,8 @@ def update_connection(name: str,
     username: str = Form(None),
     password: str = Form(None),
     remote_path: str = Form(None),
-    protocol: Protocol = Form(None)
+    protocol: Protocol = Form(None),
+    trigger_script_path: str = Form(None)  # ✅ Optional field
 ):
     existing = collection.find_one({"name": name})
     if not existing:
@@ -128,13 +134,15 @@ def update_connection(name: str,
     if password: update_fields["password"] = password
     if remote_path: update_fields["remote_path"] = remote_path
     if protocol: update_fields["protocol"] = protocol.value
+    if trigger_script_path: update_fields["trigger_script_path"] = trigger_script_path
     update_fields["updated_at"] = datetime.utcnow()
  
     collection.update_one({"name": name}, {"$set": update_fields})
     return {"status": "updated", "name": name, "fields_updated": list(update_fields.keys())}
  
-
+# ----------------------------
 # Get a specific saved connection
+# ----------------------------
 @app.get("/connections/{name}")
 def get_connection_by_name(name: str):
     record = collection.find_one({"name": name}, {"_id": 0})
@@ -142,7 +150,9 @@ def get_connection_by_name(name: str):
         raise HTTPException(status_code=404, detail="Connection not found")
     return record
  
-# Get saved connections
+# ----------------------------
+# Get all saved connections
+# ----------------------------
 @app.get("/connections")
 def get_connections():
     try:
@@ -151,8 +161,19 @@ def get_connections():
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
  
-
+# ----------------------------
+# Delete a saved connection by name
+# ----------------------------
+@app.delete("/connections/{name}")
+def delete_connection(name: str):
+    result = collection.delete_one({"name": name})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    return {"status": "deleted", "name": name}
+ 
+# ----------------------------
 # List remote files (SFTP only)
+# ----------------------------
 @app.get("/files")
 def get_files():
     if not is_connected():
@@ -165,7 +186,9 @@ def get_files():
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
  
+# ----------------------------
 # Upload a file
+# ----------------------------
 @app.post("/upload")
 def upload(file: UploadFile = File(...)):
     if not is_connected():
@@ -180,7 +203,9 @@ def upload(file: UploadFile = File(...)):
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
  
+# ----------------------------
 # Download a file
+# ----------------------------
 @app.get("/download")
 def download(filename: str):
     if not is_connected():
@@ -192,7 +217,9 @@ def download(filename: str):
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
  
-# Delete A file 
+# ----------------------------
+# Delete a file (SFTP only)
+# ----------------------------
 @app.delete("/delete")
 def delete(filename: str):
     if not is_connected():
@@ -205,7 +232,9 @@ def delete(filename: str):
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
  
-# Disconnect
+# ----------------------------
+# Disconnect from server
+# ----------------------------
 @app.post("/disconnect")
 def disconnect():
     try:
@@ -213,5 +242,3 @@ def disconnect():
         return {"status": "disconnected"}
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
-    
-
